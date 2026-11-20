@@ -91,6 +91,7 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
   const needsPassword = Boolean(env.SETUP_PASSWORD);
 
   try {
+    console.log(`[auth] ${request.method} /authorize`); // TEMP-LOG
     if (request.method === "GET") {
       const authRequest = await oauth.parseAuthRequest(request);
       const details = await oauth.describeConsent(authRequest);
@@ -118,13 +119,18 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
       const liveReadOnly = wantLive && form.get("liveReadOnly") === "1";
 
       // Valida tudo ANTES de consumir o handle, para poder mostrar o erro na mesma página.
+      const tStart = Date.now(); // TEMP-LOG
+      console.log(`[auth] POST recebido mode=${mode} demo=${Boolean(demo)} live=${Boolean(live)}`); // TEMP-LOG
       const problem = await validate(env, form, { demo, live });
+      console.log(`[auth] validate ${problem ? "FALHOU: " + problem : "ok"} em ${Date.now() - tStart}ms`); // TEMP-LOG
       if (problem) {
         // O handle continua válido (não foi consumido): mostra o formulário outra vez com o erro.
         return new Response(page(null, handle, needsPassword, problem), { status: 400, headers: SECURITY_HEADERS });
       }
 
+      const tApprove = Date.now(); // TEMP-LOG
       const approved = await oauth.approveConsent(request, handle);
+      console.log(`[auth] approveConsent em ${Date.now() - tApprove}ms`); // TEMP-LOG
       const userId = (await sha256(`${demo?.apiKey ?? ""}|${live?.apiKey ?? ""}`)).slice(0, 24);
       const props: Props = { userId, demo, live, liveReadOnly };
       const { redirectTo } = await oauth.completeAuthorization({
@@ -134,12 +140,14 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
         scope: approved.request.scope,
         props,
       });
+      console.log(`[auth] completeAuthorization ok, total ${Date.now() - tStart}ms`); // TEMP-LOG
       approved.headers.set("Location", redirectTo);
       return new Response(null, { status: 302, headers: approved.headers });
     }
 
     return new Response("Method not allowed", { status: 405 });
   } catch (error) {
+    console.log(`[auth] ERRO: ${error instanceof Error ? error.name + ": " + error.message : String(error)}`); // TEMP-LOG
     if (error instanceof AuthorizationError && error.redirectTo) return Response.redirect(error.redirectTo, 302);
     if (error instanceof AuthorizationError) return message(error.description ?? "Pedido de autorização inválido.");
     if (error instanceof CimdFetchError) return message("Não foi possível verificar esta aplicação.");
