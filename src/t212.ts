@@ -16,6 +16,13 @@ export class T212Error extends Error {
 
 type Creds = { apiKey: string; apiSecret: string; env: T212Env };
 
+/** x-ratelimit-reset vem em segundos desde 1970; devolve quantos segundos faltam. */
+function secondsUntilReset(headers: Headers): number | undefined {
+  const reset = Number(headers.get("x-ratelimit-reset"));
+  if (!Number.isFinite(reset) || reset < 1e9) return undefined;
+  return Math.max(1, Math.ceil(reset - Date.now() / 1000));
+}
+
 function explain(status: number, body: string, headers: Headers): string {
   const detail = body.slice(0, 500);
   switch (status) {
@@ -26,8 +33,8 @@ function explain(status: number, body: string, headers: Headers): string {
     case 408:
       return "408: timeout da T212. NÃO repitas a ordem às cegas: chama get_pending_orders para ver se foi criada.";
     case 429: {
-      const reset = headers.get("x-ratelimit-reset");
-      return `429: limite de pedidos da T212 atingido${reset ? ` (repete após ${reset})` : ""}. Espera uns segundos.`;
+      const wait = secondsUntilReset(headers);
+      return `429: limite de pedidos da T212 atingido${wait ? ` (tenta de novo daqui a ~${wait}s)` : ""}. Espera uns segundos.`;
     }
     default:
       return `${status}: ${detail}`;
@@ -44,16 +51,26 @@ export async function t212<T = unknown>(
   for (const [k, v] of Object.entries(opts.query ?? {})) {
     if (v !== undefined && v !== "") url.searchParams.set(k, String(v));
   }
-  const res = await fetch(url, {
-    method,
-    headers: {
-      Authorization: "Basic " + btoa(`${creds.apiKey}:${creds.apiSecret}`),
-      Accept: "application/json",
-      ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
-    },
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-    signal: AbortSignal.timeout(20_000),
-  });
+  const send = () =>
+    fetch(url, {
+      method,
+      headers: {
+        Authorization: "Basic " + btoa(`${creds.apiKey}:${creds.apiSecret}`),
+        Accept: "application/json",
+        ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
+      },
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      signal: AbortSignal.timeout(20_000),
+    });
+  let res = await send();
+  // Leituras (GET) são seguras de repetir: se o limite acabar em poucos segundos, espera e tenta uma vez.
+  if (res.status === 429 && method === "GET") {
+    const wait = secondsUntilReset(res.headers);
+    if (wait !== undefined && wait <= 8) {
+      await new Promise((r) => setTimeout(r, wait * 1000 + 300));
+      res = await send();
+    }
+  }
   const text = await res.text();
   if (!res.ok) throw new T212Error(res.status, explain(res.status, text, res.headers));
   return (text ? JSON.parse(text) : null) as T;
