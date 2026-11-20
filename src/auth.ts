@@ -82,6 +82,19 @@ ${error ? `<div class="err">${esc(error)}</div>` : ""}
 <script>document.querySelector('form').addEventListener('submit',function(e){var b=e.submitter;if(window.__sent){e.preventDefault();return}if(b&&b.value==='approve'){window.__sent=1;b.textContent='A ligar… não cliques outra vez';}});</script></html>`;
 }
 
+function donePage(redirectTo: string): string {
+  const url = esc(redirectTo);
+  return `<!doctype html>
+<html lang="pt"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="0;url=${url}">
+<title>Trading 212 ligada</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;max-width:480px;margin:48px auto;padding:0 16px;text-align:center}
+a{display:inline-block;margin-top:16px;padding:12px 20px;border-radius:8px;background:#111;color:#fff;text-decoration:none}</style>
+<h1>✅ Ligação concluída</h1>
+<p>A voltar ao Claude… Se nada acontecer, toca no botão. Depois podes fechar esta página.</p>
+<a href="${url}">Voltar ao Claude</a></html>`;
+}
+
 function message(text: string, status = 400): Response {
   return new Response(`<!doctype html><meta charset="utf-8"><p>${esc(text)}</p>`, { status, headers: SECURITY_HEADERS });
 }
@@ -141,8 +154,10 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
         props,
       });
       console.log(`[auth] completeAuthorization ok, total ${Date.now() - tStart}ms`); // TEMP-LOG
-      approved.headers.set("Location", redirectTo);
-      return new Response(null, { status: 302, headers: approved.headers });
+      // Em vez de um 302 "mudo" (que no telemóvel deixa o formulário velho à vista), mostra uma página de
+      // conclusão com redirecionamento automático e um botão para voltar ao Claude.
+      for (const [k, v] of Object.entries(SECURITY_HEADERS)) approved.headers.set(k, v);
+      return new Response(donePage(redirectTo), { status: 200, headers: approved.headers });
     }
 
     return new Response("Method not allowed", { status: 405 });
