@@ -6,8 +6,8 @@ import { createServer } from "./tools";
 
 const mcpHandler = createMcpHandler(createServer);
 
-// O URL a que o Claude se liga (todos os tokens ficam presos a ele). Se MCP_RESOURCE não estiver
-// definido, deduz-se do próprio pedido (https://<host>/mcp), por isso não é preciso configurar nada.
+// The URL Claude connects to (every token is bound to it). If MCP_RESOURCE is not set it is derived
+// from the request itself (https://<host>/mcp), so nothing needs to be configured.
 const providers = new Map<string, OAuthProvider<Env>>();
 
 function providerFor(resource: string): OAuthProvider<Env> {

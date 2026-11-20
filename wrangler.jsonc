@@ -5,14 +5,14 @@
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": true,
-  // TEMP-LOG: logs visíveis em Workers & Pages > t212-mcp > Observability (remover depois)
+  // TEMP-LOG: logs visible in Workers & Pages > t212-mcp > Observability (remove later)
   "observability": { "enabled": true },
   "kv_namespaces": [
-    // KV já criado na conta (t212-mcp-oauth-kv)
+    // KV namespace already created in the account (t212-mcp-oauth-kv)
     { "binding": "OAUTH_KV", "id": "a14f9723cac24434a942287d3943b036" }
   ],
   "vars": {
-    // Limite de segurança por ordem, na moeda da conta (ex.: EUR)
+    // Safety cap per buy order, in the account currency (e.g. EUR)
     "MAX_ORDER_VALUE": "100"
   }
 }

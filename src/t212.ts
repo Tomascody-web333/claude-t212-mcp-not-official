@@ -16,7 +16,7 @@ export class T212Error extends Error {
 
 type Creds = { apiKey: string; apiSecret: string; env: T212Env };
 
-/** x-ratelimit-reset vem em segundos desde 1970; devolve quantos segundos faltam. */
+/** x-ratelimit-reset is in seconds since 1970; returns how many seconds are left. */
 function secondsUntilReset(headers: Headers): number | undefined {
   const reset = Number(headers.get("x-ratelimit-reset"));
   if (!Number.isFinite(reset) || reset < 1e9) return undefined;
@@ -27,14 +27,14 @@ function explain(status: number, body: string, headers: Headers): string {
   const detail = body.slice(0, 500);
   switch (status) {
     case 401:
-      return "401: API key/secret inválidas, ou a chave é de outro ambiente (as chaves DEMO e LIVE são diferentes).";
+      return "401: invalid API key/secret, or the key belongs to another environment (DEMO and LIVE keys are different).";
     case 403:
-      return `403: a chave não tem permissão para esta operação (ativa a permissão certa em Definições > API na T212). ${detail}`;
+      return `403: the key does not have permission for this operation (enable the right permission in Trading 212 Settings > API). ${detail}`;
     case 408:
-      return "408: timeout da T212. NÃO repitas a ordem às cegas: chama get_pending_orders para ver se foi criada.";
+      return "408: Trading 212 timed out. Do NOT blindly repeat the order: call get_pending_orders to check whether it was created.";
     case 429: {
       const wait = secondsUntilReset(headers);
-      return `429: limite de pedidos da T212 atingido${wait ? ` (tenta de novo daqui a ~${wait}s)` : ""}. Espera uns segundos.`;
+      return `429: Trading 212 rate limit reached${wait ? ` (try again in ~${wait}s)` : ""}. Wait a few seconds.`;
     }
     default:
       return `${status}: ${detail}`;
@@ -64,7 +64,7 @@ export async function t212<T = unknown>(
     });
   const t0 = Date.now(); // TEMP-LOG
   let res = await send();
-  // Leituras (GET) são seguras de repetir: se o limite acabar em poucos segundos, espera e tenta uma vez.
+  // Reads (GET) are safe to repeat: if the limit resets within a few seconds, wait and retry once.
   if (res.status === 429 && method === "GET") {
     const wait = secondsUntilReset(res.headers);
     if (wait !== undefined && wait <= 8) {
@@ -72,7 +72,7 @@ export async function t212<T = unknown>(
       res = await send();
     }
   }
-  console.log(`[t212] ${creds.env} ${method} ${path} -> ${res.status} em ${Date.now() - t0}ms`); // TEMP-LOG
+  console.log(`[t212] ${creds.env} ${method} ${path} -> ${res.status} in ${Date.now() - t0}ms`); // TEMP-LOG
   const text = await res.text();
   if (!res.ok) throw new T212Error(res.status, explain(res.status, text, res.headers));
   return (text ? JSON.parse(text) : null) as T;

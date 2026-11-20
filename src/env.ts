@@ -3,10 +3,10 @@ import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 export interface Env {
   OAUTH_KV: KVNamespace;
   OAUTH_PROVIDER: OAuthHelpers;
-  /** Opcional: força o URL público do MCP (acaba em /mcp). Por defeito deduz-se do pedido. */
+  /** Optional: forces the public MCP URL (ends in /mcp). By default it is derived from the request. */
   MCP_RESOURCE?: string;
   MAX_ORDER_VALUE?: string;
-  /** Opcional (wrangler secret put SETUP_PASSWORD): palavra-passe pedida na página de ligação. */
+  /** Optional (wrangler secret put SETUP_PASSWORD): password asked on the connect page. */
   SETUP_PASSWORD?: string;
 }
 
@@ -17,11 +17,11 @@ export interface Account {
   apiSecret: string;
 }
 
-/** O que guardamos (cifrado pela biblioteca OAuth) por ligação. */
+/** What we store per connection (encrypted by the OAuth library). */
 export interface Props extends Record<string, unknown> {
   userId: string;
   demo?: Account;
   live?: Account;
-  /** Se true, a conta LIVE só permite leitura (a DEMO continua livre). */
+  /** If true, the LIVE account is read-only (DEMO stays unrestricted). */
   liveReadOnly: boolean;
 }
