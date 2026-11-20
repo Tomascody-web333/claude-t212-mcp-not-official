@@ -20,7 +20,7 @@ async function safeEqual(a: string, b: string): Promise<boolean> {
 const SECURITY_HEADERS = {
   "Content-Type": "text/html; charset=utf-8",
   "X-Frame-Options": "DENY",
-  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'",
+  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-l8ZtwY7Qp4wtWdI1g7/dTMVy84xVcfRdDkwyr+26Zeg='; form-action 'self'; frame-ancestors 'none'",
   "Referrer-Policy": "no-referrer",
   "Cache-Control": "no-store",
 };
@@ -43,6 +43,9 @@ function page(details: ConsentDescription | null, handle: string, needsPassword:
  .err{background:#fde8e8;border:1px solid #e0a0a0;padding:10px;border-radius:8px}
  .warn{background:#fff6e0;border:1px solid #e6c36a;padding:10px;border-radius:8px;margin:12px 0}
  fieldset{border:1px solid #ccc;border-radius:8px;margin:14px 0}
+ .modes input{margin:6px 8px 6px 0}.modes label.m{display:inline;font-weight:400;margin:0}
+ .f-demo,.f-live{display:none}
+ #m-demo:checked~.f-demo,#m-both:checked~.f-demo,#m-live:checked~.f-live,#m-both:checked~.f-live{display:block}
  button{padding:10px 16px;border-radius:8px;border:0;font-size:16px;cursor:pointer}
  .ok{background:#111;color:#fff}.no{background:#eee}
 </style>
@@ -52,24 +55,31 @@ ${details?.redirectIsLoopback ? '<div class="warn"><strong>Isto envia acesso par
 ${error ? `<div class="err">${esc(error)}</div>` : ""}
 <form method="post">
  <input type="hidden" name="handle" value="${esc(handle)}">
- <fieldset><legend><strong>DEMO</strong> — dinheiro simulado</legend>
+ <div class="modes">
+ <p><strong>Que conta queres ligar?</strong></p>
+ <input type="radio" id="m-demo" name="mode" value="demo" checked><label class="m" for="m-demo"><strong>DEMO</strong> — dinheiro simulado</label><br>
+ <input type="radio" id="m-live" name="mode" value="live"><label class="m" for="m-live"><strong>LIVE</strong> — dinheiro real</label><br>
+ <input type="radio" id="m-both" name="mode" value="both"><label class="m" for="m-both"><strong>Os dois</strong> (demo e live)</label>
+ <fieldset class="f-demo"><legend><strong>DEMO</strong> — dinheiro simulado</legend>
   <label for="dk">API Key (demo)</label>
   <input id="dk" name="demoKey" type="text" autocomplete="off">
   <label for="ds">API Secret (demo)</label>
   <input id="ds" name="demoSecret" type="password" autocomplete="off">
  </fieldset>
- <fieldset><legend><strong>LIVE</strong> — dinheiro REAL</legend>
+ <fieldset class="f-live"><legend><strong>LIVE</strong> — dinheiro REAL</legend>
   <label for="lk">API Key (live)</label>
   <input id="lk" name="liveKey" type="text" autocomplete="off">
   <label for="ls">API Secret (live)</label>
   <input id="ls" name="liveSecret" type="password" autocomplete="off">
   <div class="row"><input type="checkbox" id="r" name="liveReadOnly" value="1"><label for="r" style="margin:0;font-weight:400">Conta LIVE só em leitura (bloqueia criar/cancelar ordens e pies no dinheiro real)</label></div>
  </fieldset>
- <p>Preenche uma ou as duas. Com as duas ligadas, o Claude tem de indicar em cada ação se é <em>demo</em> ou <em>live</em>.</p>
+ </div>
+ <p>Com as duas ligadas, o Claude tem de indicar em cada ação se é <em>demo</em> ou <em>live</em>.</p>
  ${needsPassword ? '<label for="p">Palavra-passe de configuração</label><input id="p" name="setupPassword" type="password" autocomplete="off" required>' : ""}
  <div class="warn">As chaves ficam guardadas cifradas e só são usadas para falar com a Trading 212. As chaves DEMO e LIVE são diferentes (geradas em ambientes diferentes da app). Cria cada chave só com as permissões de que precisas.</div>
  <p><button class="ok" name="decision" value="approve">Ligar</button> <button class="no" name="decision" value="deny" formnovalidate>Cancelar</button></p>
-</form></html>`;
+</form>
+<script>document.querySelector('form').addEventListener('submit',function(e){var b=e.submitter;if(window.__sent){e.preventDefault();return}if(b&&b.value==='approve'){window.__sent=1;b.textContent='A ligar… não cliques outra vez';}});</script></html>`;
 }
 
 function message(text: string, status = 400): Response {
@@ -99,9 +109,13 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
       }
 
       const field = (n: string) => String(form.get(n) ?? "").trim();
-      const demo: Account | undefined = field("demoKey") || field("demoSecret") ? { apiKey: field("demoKey"), apiSecret: field("demoSecret") } : undefined;
-      const live: Account | undefined = field("liveKey") || field("liveSecret") ? { apiKey: field("liveKey"), apiSecret: field("liveSecret") } : undefined;
-      const liveReadOnly = form.get("liveReadOnly") === "1";
+      const mode = field("mode");
+      const wantDemo = mode === "demo" || mode === "both";
+      const wantLive = mode === "live" || mode === "both";
+      // Só conta o que foi escolhido no menu; campos de outra opção são ignorados.
+      const demo: Account | undefined = wantDemo ? { apiKey: field("demoKey"), apiSecret: field("demoSecret") } : undefined;
+      const live: Account | undefined = wantLive ? { apiKey: field("liveKey"), apiSecret: field("liveSecret") } : undefined;
+      const liveReadOnly = wantLive && form.get("liveReadOnly") === "1";
 
       // Valida tudo ANTES de consumir o handle, para poder mostrar o erro na mesma página.
       const problem = await validate(env, form, { demo, live });
@@ -138,10 +152,10 @@ async function validate(env: Env, form: FormData, accounts: { demo?: Account; li
     const given = String(form.get("setupPassword") ?? "");
     if (!(await safeEqual(given, env.SETUP_PASSWORD))) return "Palavra-passe de configuração incorreta.";
   }
-  if (!accounts.demo && !accounts.live) return "Preenche as chaves de pelo menos uma conta (DEMO ou LIVE).";
-  for (const name of ["demo", "live"] as const satisfies readonly T212Env[]) {
+  if (!accounts.demo && !accounts.live) return "Escolhe que conta queres ligar (DEMO, LIVE ou as duas).";
+  const checks = (["demo", "live"] as const satisfies readonly T212Env[]).map(async (name): Promise<string | null> => {
     const acc = accounts[name];
-    if (!acc) continue;
+    if (!acc) return null;
     const label = name.toUpperCase();
     if (!acc.apiKey || !acc.apiSecret) return `Conta ${label}: preenche a API Key e o API Secret.`;
     try {
@@ -155,7 +169,11 @@ async function validate(env: Env, form: FormData, accounts: { demo?: Account; li
       }
       return `Conta ${label}: não consegui validar as chaves: ${e instanceof Error ? e.message : String(e)}`;
     }
-  }
+    return null;
+  });
+  // As duas contas têm limites de pedidos separados, por isso validam-se em paralelo.
+  const problems = (await Promise.all(checks)).filter((p): p is string => p !== null);
+  if (problems.length) return problems.join(" ");
   return null;
 }
 
