@@ -10,8 +10,6 @@
     { "binding": "OAUTH_KV" }
   ],
   "vars": {
-    // URL EXATO a que o Claude se liga (acaba em /mcp). Preenche depois do 1.º deploy.
-    "MCP_RESOURCE": "https://t212-mcp.O-TEU-SUBDOMINIO.workers.dev/mcp",
     // Limite de segurança por ordem, na moeda da conta (ex.: EUR)
     "MAX_ORDER_VALUE": "100"
   }

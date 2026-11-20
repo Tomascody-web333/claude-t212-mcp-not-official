@@ -3,10 +3,10 @@
 ## Deploy
 1. `npm install`
 2. `npx wrangler login`
-3. (Nada a fazer: o KV `OAUTH_KV` é criado automaticamente no primeiro deploy. Se falhar, corre `npx wrangler kv namespace create OAUTH_KV` e põe o `id` em `wrangler.jsonc`.)
-4. `npx wrangler deploy` → anota o URL (`https://t212-mcp.<subdominio>.workers.dev`)
-5. Em `wrangler.jsonc` põe `MCP_RESOURCE` = `<esse URL>/mcp` e volta a fazer `npx wrangler deploy`
-6. (Opcional, recomendado) `npx wrangler secret put SETUP_PASSWORD` — palavra-passe pedida na página de ligação
+3. `npx wrangler deploy` — cria o KV `OAUTH_KV` sozinho e mostra o URL (`https://t212-mcp.<subdominio>.workers.dev`)
+4. (Opcional, recomendado) `npx wrangler secret put SETUP_PASSWORD` — palavra-passe pedida na página de ligação
+
+O URL público do MCP (`<URL>/mcp`) é deduzido do pedido; só precisas de `MCP_RESOURCE` se quiseres forçá-lo.
 
 ## Ligar no Claude
 Definições → Conectores → Adicionar conector personalizado → URL `https://…/mcp`.

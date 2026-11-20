@@ -3,7 +3,8 @@ import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 export interface Env {
   OAUTH_KV: KVNamespace;
   OAUTH_PROVIDER: OAuthHelpers;
-  MCP_RESOURCE: string;
+  /** Opcional: força o URL público do MCP (acaba em /mcp). Por defeito deduz-se do pedido. */
+  MCP_RESOURCE?: string;
   MAX_ORDER_VALUE?: string;
   /** Opcional (wrangler secret put SETUP_PASSWORD): palavra-passe pedida na página de ligação. */
   SETUP_PASSWORD?: string;
