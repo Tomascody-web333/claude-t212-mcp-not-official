@@ -6,8 +6,8 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": true,
   "kv_namespaces": [
-    // Sem "id": o wrangler cria o KV automaticamente no primeiro deploy.
-    { "binding": "OAUTH_KV" }
+    // KV já criado na conta (t212-mcp-oauth-kv)
+    { "binding": "OAUTH_KV", "id": "a14f9723cac24434a942287d3943b036" }
   ],
   "vars": {
     // Limite de segurança por ordem, na moeda da conta (ex.: EUR)
