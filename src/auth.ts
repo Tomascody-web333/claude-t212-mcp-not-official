@@ -138,7 +138,6 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
   const needsPassword = Boolean(env.SETUP_PASSWORD);
 
   try {
-    console.log(`[auth] ${request.method} /authorize`); // TEMP-LOG
     if (request.method === "GET") {
       const authRequest = await oauth.parseAuthRequest(request);
       const details = await oauth.describeConsent(authRequest);
@@ -166,18 +165,13 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
       const liveReadOnly = wantLive && form.get("liveReadOnly") === "1";
 
       // Validate everything BEFORE consuming the handle, so an error can be shown on the same page.
-      const tStart = Date.now(); // TEMP-LOG
-      console.log(`[auth] POST received mode=${mode} demo=${Boolean(demo)} live=${Boolean(live)}`); // TEMP-LOG
       const problem = await validate(env, form, { demo, live });
-      console.log(`[auth] validate ${problem ? "FAILED: " + problem : "ok"} in ${Date.now() - tStart}ms`); // TEMP-LOG
       if (problem) {
         // The handle is still valid (not consumed): show the form again with the error.
         return new Response(page(null, handle, needsPassword, problem), { status: 400, headers: SECURITY_HEADERS });
       }
 
-      const tApprove = Date.now(); // TEMP-LOG
       const approved = await oauth.approveConsent(request, handle);
-      console.log(`[auth] approveConsent in ${Date.now() - tApprove}ms`); // TEMP-LOG
       const userId = (await sha256(`${demo?.apiKey ?? ""}|${live?.apiKey ?? ""}`)).slice(0, 24);
       const props: Props = { userId, demo, live, liveReadOnly };
       const { redirectTo } = await oauth.completeAuthorization({
@@ -187,7 +181,6 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
         scope: approved.request.scope,
         props,
       });
-      console.log(`[auth] completeAuthorization ok, total ${Date.now() - tStart}ms`); // TEMP-LOG
       // Instead of a silent 302 (on mobile it leaves the stale form open), show a completion page
       // with an automatic redirect and a button back to Claude.
       for (const [k, v] of Object.entries(SECURITY_HEADERS)) approved.headers.set(k, v);
@@ -196,7 +189,6 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
 
     return new Response("Method not allowed", { status: 405 });
   } catch (error) {
-    console.log(`[auth] ERROR: ${error instanceof Error ? error.name + ": " + error.message : String(error)}`); // TEMP-LOG
     if (error instanceof AuthorizationError && error.redirectTo) return Response.redirect(error.redirectTo, 302);
     if (error instanceof AuthorizationError) return message(error.description ?? "Invalid authorization request.");
     if (error instanceof CimdFetchError) return message("Could not verify this application.");

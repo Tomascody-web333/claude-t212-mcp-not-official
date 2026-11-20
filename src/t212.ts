@@ -62,7 +62,6 @@ export async function t212<T = unknown>(
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
       signal: AbortSignal.timeout(20_000),
     });
-  const t0 = Date.now(); // TEMP-LOG
   let res = await send();
   // Reads (GET) are safe to repeat: if the limit resets within a few seconds, wait and retry once.
   if (res.status === 429 && method === "GET") {
@@ -72,7 +71,6 @@ export async function t212<T = unknown>(
       res = await send();
     }
   }
-  console.log(`[t212] ${creds.env} ${method} ${path} -> ${res.status} in ${Date.now() - t0}ms`); // TEMP-LOG
   const text = await res.text();
   if (!res.ok) throw new T212Error(res.status, explain(res.status, text, res.headers));
   return (text ? JSON.parse(text) : null) as T;

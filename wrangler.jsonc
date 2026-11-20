@@ -5,8 +5,6 @@
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": true,
-  // TEMP-LOG: logs visible in Workers & Pages > t212-mcp > Observability (remove later)
-  "observability": { "enabled": true },
   "kv_namespaces": [
     // KV namespace already created in the account (t212-mcp-oauth-kv)
     { "binding": "OAUTH_KV", "id": "a14f9723cac24434a942287d3943b036" }

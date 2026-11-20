@@ -31,6 +31,3 @@ Write: `place_market_order`, `place_limit_order`, `place_stop_order`, `place_sto
 - "LIVE account read-only" on the connect page blocks orders/pies with real money (DEMO stays free).
 - Keys are stored encrypted (workers-oauth-provider) and are never returned to Claude.
 - Orders are never retried automatically (the Trading 212 API is not idempotent).
-
-## Debugging
-Lines tagged `TEMP-LOG` are temporary timing logs (no keys or tokens). Remove them when done.
