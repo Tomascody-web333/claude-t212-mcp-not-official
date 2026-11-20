@@ -6,8 +6,8 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": true,
   "kv_namespaces": [
-    // Cria com: npx wrangler kv namespace create OAUTH_KV   e cola aqui o id
-    { "binding": "OAUTH_KV", "id": "COLA_AQUI_O_ID_DO_KV" }
+    // Sem "id": o wrangler cria o KV automaticamente no primeiro deploy.
+    { "binding": "OAUTH_KV" }
   ],
   "vars": {
     // URL EXATO a que o Claude se liga (acaba em /mcp). Preenche depois do 1.º deploy.
