@@ -379,6 +379,15 @@ export function createServer(): McpServer {
     goal: z.number().positive().optional().describe("Target value of the pie in the account currency."),
     endDate: z.string().optional().describe("Target date, ISO 8601, e.g. 2030-01-01T00:00:00Z"),
   };
+  // Only the pie fields go to Trading 212 (never the 'account' argument, or the API answers "Invalid payload").
+  const pieFields = (a: any) => ({
+    name: a.name,
+    instrumentShares: a.instrumentShares,
+    dividendCashAction: a.dividendCashAction,
+    icon: a.icon,
+    goal: a.goal,
+    endDate: a.endDate,
+  });
   const checkWeights = (w: Record<string, number>) => {
     const sum = Object.values(w).reduce((a, b) => a + b, 0);
     if (Math.abs(sum - 1) > 0.001) throw new Error(`The weights sum to ${sum.toFixed(3)}; they must sum to 1.`);
@@ -395,7 +404,7 @@ export function createServer(): McpServer {
     async (p, a) => {
       assertCanWrite(p);
       checkWeights(a.instrumentShares);
-      return t212(p, "POST", "/equity/pies", { body: a });
+      return t212(p, "POST", "/equity/pies", { body: pieFields(a) });
     },
   );
 
@@ -407,10 +416,10 @@ export function createServer(): McpServer {
       inputSchema: { id: z.number().int(), ...pieBody },
       annotations: WRITE,
     },
-    async (p, { id, ...body }) => {
+    async (p, a) => {
       assertCanWrite(p);
-      checkWeights(body.instrumentShares);
-      return t212(p, "POST", `/equity/pies/${id}`, { body });
+      checkWeights(a.instrumentShares);
+      return t212(p, "POST", `/equity/pies/${a.id}`, { body: pieFields(a) });
     },
   );
 
