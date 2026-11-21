@@ -150,6 +150,9 @@ Not every Claude client necessarily shows the `instructions` to the model, which
 - Trading 212 rate limits apply (for example about 1 request per 5 s on the account summary and
   1 per 2 s for limit-type orders). Claude gets a clear message when a limit is hit.
 - The pies endpoints are deprecated by Trading 212 and may stop working.
+- **You cannot put money into a pie through the API.** The Trading 212 API only lets you create, view, update, duplicate and
+  delete pies. Pies created here start empty (only the weights are set): fund them in the Trading 212 app.
+  To buy the same mix directly, ask Claude to place normal orders for each stock instead (they are not placed inside the pie).
 - Prices reflect what the API returns; they can be delayed and are not a trading signal.
 
 ## Develop
