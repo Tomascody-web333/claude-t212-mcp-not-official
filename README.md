@@ -26,7 +26,8 @@ as a separate tool so you can set permissions per tool in Claude (e.g. "needs ap
 ## Deploy
 
 ```bash
-git clone <this-repo> && cd <this-repo>
+git clone https://github.com/Tomascody-web333/claude-t212-mcp-not-official
+cd claude-t212-mcp-not-official
 npm install
 npx wrangler login
 
