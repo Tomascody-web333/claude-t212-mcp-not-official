@@ -266,7 +266,7 @@ async function validate(env: Env, form: FormData, handle: string, accounts: { de
 
 const REPO = "https://github.com/Tomascody-web333/claude-t212-mcp-not-official";
 
-function rootPage(origin: string): string {
+function rootPage(): string {
   return shell("Unofficial Trading 212 MCP server", `<style>code{background:#161d27;border:1px solid var(--border);border-radius:6px;padding:1px 6px;font-size:.9em;word-break:break-all}ol,ul{padding-left:1.2rem}li{margin:4px 0}h2{font-size:1.05rem;margin:22px 0 6px}</style>
 <div class="card">
 <h1>Unofficial Trading 212 MCP server</h1>
@@ -284,7 +284,7 @@ function rootPage(origin: string): string {
 <h2>How to set it up</h2>
 <ol>
 <li>Deploy your own copy (npm + Wrangler, or connect your GitHub / GitLab repo to Cloudflare Workers). Steps are in the <a href="${REPO}#deploy">README</a>.</li>
-<li>In Claude: Settings → Connectors → Add custom connector, URL: <code>${esc(origin)}/mcp</code></li>
+<li>In Claude: Settings → Connectors → Add custom connector, URL: <code>https://t212-mcp.&lt;your-subdomain&gt;.workers.dev/mcp</code></li>
 <li>In Advanced settings keep <strong>Sign in now</strong> and set the OAuth client to <strong>Register automatically</strong> (not "Use Claude's published identity").</li>
 <li>On the connect page choose DEMO, LIVE or Both and enter your Trading 212 API key and secret.</li>
 <li>Keep the write tools (orders, pies) on "needs approval".</li>
@@ -301,7 +301,7 @@ export const authHandler = {
   fetch(request: Request, env: Env): Promise<Response> | Response {
     const { pathname } = new URL(request.url);
     if (pathname === "/authorize") return handleAuthorize(request, env);
-    if (pathname === "/") return new Response(rootPage(new URL(request.url).origin), { headers: SECURITY_HEADERS });
+    if (pathname === "/") return new Response(rootPage(), { headers: SECURITY_HEADERS });
     return new Response("Not found", { status: 404 });
   },
 };
