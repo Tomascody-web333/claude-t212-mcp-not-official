@@ -127,6 +127,8 @@ Not every Claude client necessarily shows the `instructions` to the model, which
 
 - `MAX_ORDER_VALUE` (`wrangler.jsonc`, default `100`): refuses buy orders worth more than this per order,
   in the account currency. Lower it, or raise it deliberately.
+- **Disclaimer:** the connect page requires ticking a disclaimer (unofficial project, not financial advice, trading risk,
+  your responsibility, no liability, real money on LIVE) before anything can be connected.
 - **Risky mode** (connect page): removes the `MAX_ORDER_VALUE` cap for that connection, so Claude can place orders
   of any size on the DEMO and LIVE accounts you connect there. It is locked unless `SETUP_PASSWORD` is set, and ticking
   it requires typing the setup password again before you press Connect. Use it only if you understand the risk:

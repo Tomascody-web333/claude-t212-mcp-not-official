@@ -127,6 +127,10 @@ ${gate ? "" : '<div class="err"><strong>No setup password is set (HIGHLY RECOMME
  </fieldset>`}
  <p class="hint">When both are connected, Claude must say whether each action is on <em>demo</em> or <em>live</em>.</p>
  ${gate ? `<input type="hidden" name="gateToken" value="${esc(gate)}">` : ""}
+ <fieldset class="disc"><legend><strong>Disclaimer</strong></legend>
+  <p class="hint">This is an <strong>unofficial</strong> open-source project (Apache-2.0, provided "AS IS"), not affiliated with or endorsed by Trading 212 or Anthropic. It is <strong>not financial advice</strong>. Trading involves risk and you can lose money. Orders placed through Claude, including mistakes, misunderstandings or a wrong order, are your responsibility, and LIVE orders use REAL money. The author is not liable for any loss or damage. Your keys are stored encrypted in your own Cloudflare account.</p>
+  <div class="row"><input type="checkbox" id="dc" name="acceptDisclaimer" value="1" required><label for="dc"><strong>I have read and accept this disclaimer and I use this software at my own risk.</strong></label></div>
+ </fieldset>
  <div class="warn">Your keys are stored encrypted and only used to talk to Trading 212. DEMO and LIVE keys are different (generated in different environments of the app). Create each key with only the permissions you need.</div>
  <div class="btns"><button class="ok" name="decision" value="approve">Connect</button><button class="no" name="decision" value="deny" formnovalidate>Cancel</button></div>
 </form>
@@ -247,6 +251,7 @@ async function validate(env: Env, form: FormData, handle: string, accounts: { de
     const given = String(form.get("gateToken") ?? "");
     if (!(await safeEqual(given, await gateToken(env.SETUP_PASSWORD, handle)))) return "Setup password missing or expired. Reload the page and enter it again.";
   }
+  if (form.get("acceptDisclaimer") !== "1") return "You must read and accept the disclaimer to connect.";
   if (wantRisky) {
     if (!env.SETUP_PASSWORD) return "Risky mode needs a SETUP_PASSWORD secret on the Worker. Define it first.";
     if (!(await safeEqual(String(form.get("riskyPassword") ?? ""), env.SETUP_PASSWORD))) {
