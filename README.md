@@ -52,10 +52,15 @@ Change the worker name in `wrangler.jsonc` if you want a different URL.
 ## Connect in Claude
 
 1. Settings → Connectors → **Add custom connector**.
-2. URL: `https://<your-worker>.workers.dev/mcp` (leave the OAuth client fields empty).
-3. A page opens. Choose **DEMO**, **LIVE** or **Both**, and enter only the API key and secret you need
+2. URL: `https://<your-worker>.workers.dev/mcp`.
+3. Open the connector's **Advanced settings** and choose the right authentication options:
+   - Leave the OAuth Client ID / Secret fields **empty** and let Claude **configure OAuth automatically**
+     (dynamic client registration). Do **not** use Claude's default OAuth client; it is not the right one for this server
+     and the connection will fail with "authorization was not started in this browser".
+   - Then click **Sign in now** (the exact labels may vary slightly between Claude versions).
+4. A page opens. Choose **DEMO**, **LIVE** or **Both**, and enter only the API key and secret you need
    (plus the setup password if you set one).
-4. The keys are validated against Trading 212 before the connection is approved.
+5. The keys are validated against Trading 212 before the connection is approved.
 
 When both accounts are connected, every tool takes `account: demo | live` and Claude has to say which one.
 
