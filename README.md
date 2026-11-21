@@ -115,6 +115,14 @@ Conditional orders:
 - "Buy when the price **falls** to X" → `place_limit_order`
 - Pie weights must sum to 1.
 
+## Built-in guide for the model
+
+On connect the server sends Claude a short guide (MCP `instructions`) and every tool has a detailed description,
+so the model knows how to use Trading 212 without reading its docs: DEMO vs LIVE, which order type to use for
+"when the price reaches X", the safety cap, rate limits, why orders must not be blindly retried, and how pies work.
+It lives in `src/tools.ts` (`INSTRUCTIONS` and each tool's `description`); edit it there if you want to change the behaviour.
+Not every Claude client necessarily shows the `instructions` to the model, which is why the tool descriptions repeat the key rules.
+
 ## Safety
 
 - `MAX_ORDER_VALUE` (`wrangler.jsonc`, default `100`): refuses buy orders worth more than this per order,

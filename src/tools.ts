@@ -111,10 +111,50 @@ const SOFT_WRITE = { readOnlyHint: false, destructiveHint: false, idempotentHint
 const NO_RETRY =
   " The Trading 212 API is not idempotent: if there is an error or timeout, check get_pending_orders before retrying.";
 
+// ---------- guide shown to the model when it connects ----------
+
+const INSTRUCTIONS = `Unofficial Trading 212 server (Invest and Stocks ISA accounts only). Read this before using the tools.
+
+ACCOUNTS
+- DEMO = simulated money, LIVE = real money. If both are connected, every tool needs 'account' ("demo" or "live"). Never guess: ask the user.
+- Before any write on LIVE, state what you are about to do (ticker, side, quantity/amount, price, order type) and wait for the user's confirmation.
+- The LIVE account may be read-only (writes are refused), and buys are capped per order (MAX_ORDER_VALUE). Do not try to split an order to get around the cap.
+- Amounts are in the account currency (check get_account_summary). The API only trades in that currency.
+
+FINDING TICKERS AND PRICES
+- Orders need the Trading 212 ticker (e.g. AAPL_US_EQ, NOS_PT_EQ, VUAGl_EQ). Find it with search_instruments (name, short name or ISIN). The same company can have several tickers (different exchange/currency): pick the one in the user's account currency when possible.
+- There is no live quote tool. For a stock the user already owns, get_positions has currentPrice. Otherwise ask the user for the price. Buys by 'value' and market buys need a price to convert the amount to a quantity and to check the cap.
+
+CONDITIONAL ORDERS ("when X reaches Y, buy Z")
+- You cannot watch prices, so place a resting order that Trading 212 executes later:
+  - Buy when the price RISES to Y -> place_stop_order (side buy, stopPrice Y).
+  - Buy when the price FALLS to Y -> place_limit_order (side buy, limitPrice Y).
+  - Sell when the price FALLS to Y (stop-loss) -> place_stop_order (side sell).
+  - Sell when the price RISES to Y (take-profit) -> place_limit_order (side sell).
+  - place_stop_limit_order = stop that then becomes a limit order (caps the execution price).
+- timeValidity: DAY expires at the end of the day, GOOD_TILL_CANCEL stays until cancelled (default).
+- Give quantity (number of shares, fractions allowed) OR value (amount in account currency), never both. Sells are sent as negative quantities by the server: just use side "sell".
+- Always show the user the resulting order and check it with get_pending_orders. Cancel with cancel_order (needs the order id).
+
+ERRORS AND SAFETY
+- The Trading 212 API is NOT idempotent. After a timeout (408) or any unclear error on an order, call get_pending_orders / get_order_history BEFORE retrying, or you may create a duplicate order.
+- 429 = rate limit. Wait the time given in the message and retry only reads. Limits are strict (for example roughly one request per few seconds on some endpoints and about 30 s for listing pies), so do not call tools in a loop.
+- 403 = the API key lacks that permission (the user enables it in Trading 212 Settings > API). 401 = wrong key or wrong environment (demo and live keys are different).
+
+PIES
+- Pie endpoints are deprecated by Trading 212 but still work. Pies created here start empty: this server has no tool to move money into a pie.
+- instrumentShares are fractions that must sum to exactly 1 (e.g. {"AAPL_US_EQ":0.5,"MSFT_US_EQ":0.5}). dividendCashAction is REINVEST or TO_ACCOUNT_CASH. Optional: icon (a Trading 212 icon name such as "Coins"), goal (target value), endDate (ISO 8601).
+- update_pie replaces the whole configuration: send every field again. delete_pie cannot be undone: confirm first. Shares held inside a pie are not available for normal orders (see quantityInPies in get_positions).
+
+PAGINATION
+- get_order_history, get_dividend_history and get_transactions are paginated: use the cursor / nextPagePath from the previous response for the next page.
+
+Nothing here is financial advice. Do not recommend trades; execute what the user asks.`;
+
 // ---------- server ----------
 
 export function createServer(): McpServer {
-  const base = new McpServer({ name: "trading212", version: "1.0.0" });
+  const base = new McpServer({ name: "trading212", version: "1.0.0" }, { instructions: INSTRUCTIONS });
   // Every tool gets an 'account' argument (demo/live) and a resolved context.
   const server = {
     registerTool(name: string, config: any, handler: (c: Ctx, args: any) => Promise<unknown>) {
@@ -132,7 +172,8 @@ export function createServer(): McpServer {
     "get_account_summary",
     {
       title: "View account summary",
-      description: "Available cash, invested amount, total value and profit/loss of the Trading 212 account.",
+      description:
+        "Available cash, invested amount, total value and profit/loss of the account, with its currency. Use it first to see how much cash is available and in which currency. Strict rate limit: do not call it repeatedly.",
       annotations: READ,
     },
     (p) => t212(p, "GET", "/equity/account/summary"),
@@ -143,7 +184,7 @@ export function createServer(): McpServer {
     {
       title: "View my holdings (positions)",
       description:
-        "Lists open positions (quantity, average price, current price, profit/loss). Optionally filter by ticker.",
+        "Lists open positions: ticker, quantity, average price paid, currentPrice (in the instrument currency), quantityInPies (shares inside pies are not free to trade) and profit/loss converted to the account currency. Optionally filter by ticker. This is also the way to get the current price of a stock the user already owns.",
       inputSchema: { ticker: ticker.optional() },
       annotations: READ,
     },
@@ -178,7 +219,8 @@ export function createServer(): McpServer {
     "get_pending_orders",
     {
       title: "View pending orders",
-      description: "Lists active orders (not yet filled, cancelled or expired).",
+      description:
+        "Lists active orders that are not yet filled, cancelled or expired (including your stop/limit orders waiting for a price). Use it to verify an order was created and to get order ids for cancel_order.",
       annotations: READ,
     },
     (p) => t212(p, "GET", "/equity/orders"),
@@ -188,7 +230,7 @@ export function createServer(): McpServer {
     "get_pending_order",
     {
       title: "View one pending order",
-      description: "Details of a pending order by its id.",
+      description: "Details of one active order by its numeric id (from get_pending_orders).",
       inputSchema: { id: z.number().int() },
       annotations: READ,
     },
@@ -199,7 +241,8 @@ export function createServer(): McpServer {
     "get_order_history",
     {
       title: "View order history",
-      description: "Order history (paginated). Use nextPagePath/cursor from the response for the next page.",
+      description:
+        "History of past orders (filled, cancelled, rejected), newest first, paginated. Use the cursor / nextPagePath from the response to get the next page. For orders still waiting, use get_pending_orders instead.",
       inputSchema: {
         ticker: ticker.optional(),
         limit: z.number().int().min(1).max(50).default(20),
@@ -214,7 +257,7 @@ export function createServer(): McpServer {
     "get_dividend_history",
     {
       title: "View dividends received",
-      description: "History of dividends paid (paginated).",
+      description: "Dividends received, paginated (use the cursor / nextPagePath from the response for the next page). Amounts are in the account currency.",
       inputSchema: {
         ticker: ticker.optional(),
         limit: z.number().int().min(1).max(50).default(20),
@@ -229,7 +272,7 @@ export function createServer(): McpServer {
     "get_transactions",
     {
       title: "View deposits and withdrawals",
-      description: "History of deposits and withdrawals of the account (paginated).",
+      description: "Deposits, withdrawals and other cash movements of the account, paginated (use the cursor / nextPagePath from the response for the next page).",
       inputSchema: { limit: z.number().int().min(1).max(50).default(20), cursor: z.string().optional() },
       annotations: READ,
     },
@@ -240,7 +283,8 @@ export function createServer(): McpServer {
     "list_pies",
     {
       title: "View my pies",
-      description: "Lists all pies. Note: Trading 212 marks the pie endpoints as deprecated.",
+      description:
+        "Lists all pies with their id, cash, result and progress (no names or holdings: use get_pie for those). Trading 212 marks the pie endpoints as deprecated. Strict rate limit (about one call per 30 s).",
       annotations: READ,
     },
     (p) => t212(p, "GET", "/equity/pies"),
@@ -250,7 +294,8 @@ export function createServer(): McpServer {
     "get_pie",
     {
       title: "View pie details",
-      description: "Composition and status of a pie.",
+      description:
+        "Composition and settings of one pie by id: each instrument's target share (expectedShare) vs current share, owned quantity, plus name, icon, goal and dividend action. Get ids from list_pies.",
       inputSchema: { id: z.number().int() },
       annotations: READ,
     },
@@ -264,7 +309,7 @@ export function createServer(): McpServer {
     {
       title: "Place market order",
       description:
-        "Buys/sells immediately at the market price. For buys, 'estimatedPrice' (approximate current price) is required to check the safety cap and to convert 'value' into a quantity." +
+        "Buys/sells immediately at the market price (executes right away when the market is open; otherwise at the next open). For buys, 'estimatedPrice' (approximate current price, from get_positions or the user) is required to check the safety cap and to convert 'value' into a quantity. Use quantity OR value. To buy at a target price later, use place_limit_order or place_stop_order instead." +
         NO_RETRY,
       inputSchema: {
         ticker,
@@ -356,7 +401,7 @@ export function createServer(): McpServer {
     "cancel_order",
     {
       title: "Cancel pending order",
-      description: "Cancels an active order that has not been filled yet.",
+      description: "Cancels an active order that has not been filled yet. Needs the order id from get_pending_orders. Orders already filled cannot be cancelled.",
       inputSchema: { id: z.number().int() },
       annotations: WRITE,
     },
@@ -397,7 +442,8 @@ export function createServer(): McpServer {
     "create_pie",
     {
       title: "Create pie",
-      description: "Creates a pie with the given weights (deprecated in the Trading 212 API, but still available).",
+      description:
+        "Creates a pie. instrumentShares are fractions that sum to 1. The pie starts empty (no money is invested into it by this tool). Deprecated in the Trading 212 API but still available. Optional icon (e.g. \"Coins\"), goal and endDate (ISO 8601)." + NO_RETRY,
       inputSchema: pieBody,
       annotations: SOFT_WRITE,
     },
@@ -412,7 +458,7 @@ export function createServer(): McpServer {
     "update_pie",
     {
       title: "Update pie",
-      description: "Replaces the configuration of an existing pie (name, weights, goal...). Send the full configuration.",
+      description: "Replaces the whole configuration of an existing pie (name, weights, dividend action, goal, end date). Send every field again, not only the changed ones. Weights must sum to 1.",
       inputSchema: { id: z.number().int(), ...pieBody },
       annotations: WRITE,
     },
@@ -427,7 +473,7 @@ export function createServer(): McpServer {
     "duplicate_pie",
     {
       title: "Duplicate pie",
-      description: "Creates a copy of an existing pie.",
+      description: "Creates a copy of an existing pie, optionally with a new name and icon.",
       inputSchema: { id: z.number().int(), name: z.string().optional(), icon: z.string().optional() },
       annotations: SOFT_WRITE,
     },
