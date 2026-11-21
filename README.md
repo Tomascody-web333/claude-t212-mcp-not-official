@@ -44,7 +44,7 @@ npx wrangler login
 npx wrangler kv namespace create OAUTH_KV
 #    -> copy the printed id into wrangler.jsonc (kv_namespaces[0].id), replacing the existing one
 
-# 2. (Optional, recommended) password asked on the connect page
+# 2. HIGHLY RECOMMENDED: password asked on the connect page (without it the page is open to anyone with your URL)
 npx wrangler secret put SETUP_PASSWORD
 
 # 3. Deploy
@@ -62,7 +62,7 @@ Needs a GitHub or GitLab account. Cloudflare builds and deploys the Worker for y
    your GitHub / GitLab account and the fork.
 4. Build command: leave empty (or `npm install`). Deploy command: `npx wrangler deploy`.
    Keep the Worker name equal to `name` in `wrangler.jsonc` (`t212-mcp`), otherwise the build fails.
-5. (Optional, recommended) In the Worker's **Settings → Variables and Secrets** add a secret named `SETUP_PASSWORD`.
+5. **Highly recommended:** in the Worker's **Settings → Variables and Secrets** add a secret named `SETUP_PASSWORD`.
 
 Exact menu names may change in the Cloudflare dashboard.
 
@@ -147,7 +147,7 @@ Layout: `src/index.ts` (OAuth provider + MCP routing), `src/auth.ts` (connect pa
 | --- | --- | --- |
 | `OAUTH_KV` | KV binding | OAuth state and encrypted credentials (required) |
 | `MAX_ORDER_VALUE` | var | Per-order cap for buys (default `100`) |
-| `SETUP_PASSWORD` | secret | Optional password on the connect page |
+| `SETUP_PASSWORD` | secret | Password on the connect page (optional, but highly recommended) |
 | `MCP_RESOURCE` | var | Optional override of the public MCP URL (normally derived from the request) |
 
 ## License

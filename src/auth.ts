@@ -97,6 +97,7 @@ function page(details: ConsentDescription | null, handle: string, gate: string |
 ${intro}
 ${details?.redirectIsLoopback ? '<div class="warn"><strong>This sends access to an app on your computer.</strong> Continue only if you just started it.</div>' : ""}
 ${error ? `<div class="err">${esc(error)}</div>` : ""}
+${gate ? "" : '<div class="err"><strong>No setup password is set (HIGHLY RECOMMENDED).</strong> Anyone who knows this Worker URL can open this page and use your Worker. Define a Cloudflare secret named <code>SETUP_PASSWORD</code> (Worker → Settings → Variables and Secrets, type Secret, or <code>npx wrangler secret put SETUP_PASSWORD</code>) and reload. You can still continue without it.</div>'}
 <form method="post">
  <input type="hidden" name="handle" value="${esc(handle)}">
  <div class="modes">
@@ -287,6 +288,7 @@ function rootPage(): string {
 <li>In Claude: Settings → Connectors → Add custom connector, URL: <code>https://t212-mcp.&lt;your-subdomain&gt;.workers.dev/mcp</code></li>
 <li>In Advanced settings keep <strong>Sign in now</strong> and set the OAuth client to <strong>Register automatically</strong> (not "Use Claude's published identity").</li>
 <li>On the connect page choose DEMO, LIVE or Both and enter your Trading 212 API key and secret.</li>
+<li><strong>Highly recommended:</strong> define a Cloudflare secret named <code>SETUP_PASSWORD</code>, so only you can open the connect page. Without it the page is open to anyone who knows your Worker URL.</li>
 <li>Keep the write tools (orders, pies) on "needs approval".</li>
 </ol>
 <div class="warn">LIVE mode can place real orders with real money. Use at your own risk. Nothing here is financial advice.</div>
