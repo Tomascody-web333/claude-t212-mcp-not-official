@@ -125,4 +125,8 @@ Layout: `src/index.ts` (OAuth provider + MCP routing), `src/auth.ts` (connect pa
 
 ## License
 
-No license file is included yet. Add one (for example MIT) before publishing if you want others to reuse the code.
+[Apache License 2.0](LICENSE). Commercial use is allowed, but you must keep the [`NOTICE`](NOTICE) file
+and the copyright notices when you redistribute the code or a derivative, and state what you changed.
+That means crediting the author:
+
+**Created by [Tomascody-web333](https://github.com/Tomascody-web333) · [homeserverlab.org](https://homeserverlab.org)**
