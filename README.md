@@ -113,8 +113,10 @@ Conditional orders:
   and are never returned to Claude.
 - Orders are never retried automatically (the Trading 212 API is not idempotent), so a timeout will not double-buy.
 - The connect page sets a strict CSP, `X-Frame-Options: DENY` and `no-store`.
-- Anyone who can complete the connect page with valid API keys can connect to *their own* account only;
-  set `SETUP_PASSWORD` to stop strangers from using your Worker URL at all.
+- Anyone who can complete the connect page with valid API keys can connect to *their own* account only.
+  Set `SETUP_PASSWORD` to stop strangers from using your Worker at all: `/authorize` then shows only a password
+  prompt, and nothing else is rendered or accepted until it is entered. Only `/` (a plain text line) stays public;
+  `/mcp` and the OAuth token endpoints always need a valid token.
 
 ## Limits and notes
 

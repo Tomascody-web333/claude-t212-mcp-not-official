@@ -17,6 +17,15 @@ async function safeEqual(a: string, b: string): Promise<boolean> {
   return diff === 0;
 }
 
+// Proof that the setup password was entered for this particular consent handle (so the password
+// itself is never put back into the page).
+async function gateToken(secret: string, handle: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`gate:${handle}`));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 // The only inline script allowed by the CSP (guards against double submit); keep in sync with SCRIPT_HASH.
 const SCRIPT = "document.querySelector('form').addEventListener('submit',function(e){var b=e.submitter;if(window.__sent){e.preventDefault();return}if(b&&b.value==='approve'){window.__sent=1;b.textContent='Connecting… do not click again';}});";
 const SCRIPT_HASH = "AAxLcVYQJ4osVlDbfEig3al5svndpkHk/kMo0KPGGGw=";
@@ -76,7 +85,7 @@ ${HEADER}
 <main>${body}</main></html>`;
 }
 
-function page(details: ConsentDescription | null, handle: string, needsPassword: boolean, error?: string): string {
+function page(details: ConsentDescription | null, handle: string, gate: string | null, error?: string): string {
   const origin = details?.clientDomain
     ? `Published by <strong>${esc(details.clientDomain)}</strong>.`
     : "This app registered itself; its name is not verified.";
@@ -110,7 +119,7 @@ ${error ? `<div class="err">${esc(error)}</div>` : ""}
  </fieldset>
  </div>
  <p class="hint">When both are connected, Claude must say whether each action is on <em>demo</em> or <em>live</em>.</p>
- ${needsPassword ? '<label for="p">Setup password</label><input id="p" name="setupPassword" type="password" autocomplete="off" required>' : ""}
+ ${gate ? `<input type="hidden" name="gateToken" value="${esc(gate)}">` : ""}
  <div class="warn">Your keys are stored encrypted and only used to talk to Trading 212. DEMO and LIVE keys are different (generated in different environments of the app). Create each key with only the permissions you need.</div>
  <div class="btns"><button class="ok" name="decision" value="approve">Connect</button><button class="no" name="decision" value="deny" formnovalidate>Cancel</button></div>
 </form>
@@ -129,25 +138,54 @@ function donePage(redirectTo: string): string {
   return shell("Trading 212 connected", body, `<meta http-equiv="refresh" content="0;url=${url}">\n`);
 }
 
+function gatePage(error?: string): string {
+  return shell("Setup password", `<div class="card">
+<h1>Setup password</h1>
+<p>Enter the setup password to continue.</p>
+${error ? `<div class="err">${esc(error)}</div>` : ""}
+<form method="post">
+ <input type="hidden" name="gate" value="1">
+ <label for="p">Setup password</label><input id="p" name="setupPassword" type="password" autocomplete="off" required autofocus>
+ <div class="btns"><button class="ok">Continue</button></div>
+</form>
+</div>`);
+}
+
 function message(text: string, status = 400): Response {
   return new Response(shell("Trading 212", `<div class="card"><p>${esc(text)}</p></div>`), { status, headers: SECURITY_HEADERS });
 }
 
+async function consentPage(request: Request, env: Env): Promise<Response> {
+  const oauth = env.OAUTH_PROVIDER;
+  const authRequest = await oauth.parseAuthRequest(request);
+  const details = await oauth.describeConsent(authRequest);
+  const consent = await oauth.beginConsent(authRequest);
+  const gate = env.SETUP_PASSWORD ? await gateToken(env.SETUP_PASSWORD, consent.handle) : null;
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) consent.headers.set(k, v);
+  return new Response(page(details, consent.handle, gate), { headers: consent.headers });
+}
+
 async function handleAuthorize(request: Request, env: Env): Promise<Response> {
   const oauth = env.OAUTH_PROVIDER;
-  const needsPassword = Boolean(env.SETUP_PASSWORD);
 
   try {
     if (request.method === "GET") {
-      const authRequest = await oauth.parseAuthRequest(request);
-      const details = await oauth.describeConsent(authRequest);
-      const consent = await oauth.beginConsent(authRequest);
-      for (const [k, v] of Object.entries(SECURITY_HEADERS)) consent.headers.set(k, v);
-      return new Response(page(details, consent.handle, needsPassword), { headers: consent.headers });
+      // With a setup password, nothing about the connect page is shown until it is entered.
+      if (env.SETUP_PASSWORD) return new Response(gatePage(), { headers: SECURITY_HEADERS });
+      return await consentPage(request, env);
     }
 
     if (request.method === "POST") {
       const form = await request.formData();
+
+      if (form.get("gate") === "1") {
+        if (env.SETUP_PASSWORD && !(await safeEqual(String(form.get("setupPassword") ?? ""), env.SETUP_PASSWORD))) {
+          return new Response(gatePage("Incorrect setup password."), { status: 401, headers: SECURITY_HEADERS });
+        }
+        // Same query string as the original GET, so the OAuth request is parsed from it again.
+        return await consentPage(new Request(request.url, { method: "GET", headers: request.headers }), env);
+      }
+
       const handle = String(form.get("handle") ?? "");
 
       if (form.get("decision") !== "approve") {
@@ -165,10 +203,10 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
       const liveReadOnly = wantLive && form.get("liveReadOnly") === "1";
 
       // Validate everything BEFORE consuming the handle, so an error can be shown on the same page.
-      const problem = await validate(env, form, { demo, live });
+      const problem = await validate(env, form, handle, { demo, live });
       if (problem) {
         // The handle is still valid (not consumed): show the form again with the error.
-        return new Response(page(null, handle, needsPassword, problem), { status: 400, headers: SECURITY_HEADERS });
+        return new Response(page(null, handle, env.SETUP_PASSWORD ? await gateToken(env.SETUP_PASSWORD, handle) : null, problem), { status: 400, headers: SECURITY_HEADERS });
       }
 
       const approved = await oauth.approveConsent(request, handle);
@@ -196,10 +234,10 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
   }
 }
 
-async function validate(env: Env, form: FormData, accounts: { demo?: Account; live?: Account }): Promise<string | null> {
+async function validate(env: Env, form: FormData, handle: string, accounts: { demo?: Account; live?: Account }): Promise<string | null> {
   if (env.SETUP_PASSWORD) {
-    const given = String(form.get("setupPassword") ?? "");
-    if (!(await safeEqual(given, env.SETUP_PASSWORD))) return "Incorrect setup password.";
+    const given = String(form.get("gateToken") ?? "");
+    if (!(await safeEqual(given, await gateToken(env.SETUP_PASSWORD, handle)))) return "Setup password missing or expired. Reload the page and enter it again.";
   }
   if (!accounts.demo && !accounts.live) return "Choose which account you want to connect (DEMO, LIVE or both).";
   const checks = (["demo", "live"] as const satisfies readonly T212Env[]).map(async (name): Promise<string | null> => {
