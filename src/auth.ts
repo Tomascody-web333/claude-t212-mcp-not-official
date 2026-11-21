@@ -59,7 +59,7 @@ fieldset{border:1px solid var(--border);border-radius:12px;margin:14px 0;backgro
 legend{padding:0 6px;color:var(--muted)}
 .modes input[type=radio],.row input{accent-color:var(--accent);margin:7px 9px 7px 0}
 .modes label.m{display:inline;font-weight:400;margin:0}
-.row{display:flex;align-items:flex-start;margin:12px 0}.row label{margin:5px 0 0;font-weight:400;color:var(--muted)}
+.risky{border-color:#7a2f2f}.risky legend{color:#ff9d9d}.row{display:flex;align-items:flex-start;margin:12px 0}.row label{margin:5px 0 0;font-weight:400;color:var(--muted)}
 .f-demo,.f-live{display:none}
 #m-demo:checked~.f-demo,#m-both:checked~.f-demo,#m-live:checked~.f-live,#m-both:checked~.f-live{display:block}
 .err{background:#2a1416;border:1px solid #6b2a2f;color:#ffd7d7;padding:11px 12px;border-radius:10px;margin:12px 0}
@@ -119,6 +119,12 @@ ${gate ? "" : '<div class="err"><strong>No setup password is set (HIGHLY RECOMME
   <div class="row"><input type="checkbox" id="r" name="liveReadOnly" value="1"><label for="r">LIVE account read-only (blocks placing/cancelling orders and pies with real money)</label></div>
  </fieldset>
  </div>
+ ${gate ? `<fieldset class="risky"><legend><strong>Risky mode</strong></legend>
+  <div class="row"><input type="checkbox" id="rk" name="riskyMode" value="1"><label for="rk"><strong>Remove the maximum order value.</strong> Without this, buy orders above MAX_ORDER_VALUE (set on the Worker, default 100) are refused. With it, Claude can place orders of ANY size on the accounts you connect here, DEMO and LIVE.</label></div>
+  <div class="risky-confirm"><label for="rkp">Setup password (type it again; only needed if Risky mode is ticked)</label><input id="rkp" name="riskyPassword" type="password" autocomplete="off"></div>
+ </fieldset>` : `<fieldset class="risky"><legend><strong>Risky mode</strong></legend>
+  <div class="row"><input type="checkbox" disabled><label>Remove the maximum order value. <strong>Locked:</strong> it is only available when a <code>SETUP_PASSWORD</code> secret is set on the Worker.</label></div>
+ </fieldset>`}
  <p class="hint">When both are connected, Claude must say whether each action is on <em>demo</em> or <em>live</em>.</p>
  ${gate ? `<input type="hidden" name="gateToken" value="${esc(gate)}">` : ""}
  <div class="warn">Your keys are stored encrypted and only used to talk to Trading 212. DEMO and LIVE keys are different (generated in different environments of the app). Create each key with only the permissions you need.</div>
@@ -202,9 +208,10 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
       const demo: Account | undefined = wantDemo ? { apiKey: field("demoKey"), apiSecret: field("demoSecret") } : undefined;
       const live: Account | undefined = wantLive ? { apiKey: field("liveKey"), apiSecret: field("liveSecret") } : undefined;
       const liveReadOnly = wantLive && form.get("liveReadOnly") === "1";
+      const wantRisky = form.get("riskyMode") === "1";
 
       // Validate everything BEFORE consuming the handle, so an error can be shown on the same page.
-      const problem = await validate(env, form, handle, { demo, live });
+      const problem = await validate(env, form, handle, { demo, live }, wantRisky);
       if (problem) {
         // The handle is still valid (not consumed): show the form again with the error.
         return new Response(page(null, handle, env.SETUP_PASSWORD ? await gateToken(env.SETUP_PASSWORD, handle) : null, problem), { status: 400, headers: SECURITY_HEADERS });
@@ -212,11 +219,11 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
 
       const approved = await oauth.approveConsent(request, handle);
       const userId = (await sha256(`${demo?.apiKey ?? ""}|${live?.apiKey ?? ""}`)).slice(0, 24);
-      const props: Props = { userId, demo, live, liveReadOnly };
+      const props: Props = { userId, demo, live, liveReadOnly, noOrderCap: wantRisky };
       const { redirectTo } = await oauth.completeAuthorization({
         request: approved.request,
         userId,
-        metadata: { demo: Boolean(demo), live: Boolean(live), liveReadOnly },
+        metadata: { demo: Boolean(demo), live: Boolean(live), liveReadOnly, riskyMode: wantRisky },
         scope: approved.request.scope,
         props,
       });
@@ -235,10 +242,16 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
   }
 }
 
-async function validate(env: Env, form: FormData, handle: string, accounts: { demo?: Account; live?: Account }): Promise<string | null> {
+async function validate(env: Env, form: FormData, handle: string, accounts: { demo?: Account; live?: Account }, wantRisky: boolean): Promise<string | null> {
   if (env.SETUP_PASSWORD) {
     const given = String(form.get("gateToken") ?? "");
     if (!(await safeEqual(given, await gateToken(env.SETUP_PASSWORD, handle)))) return "Setup password missing or expired. Reload the page and enter it again.";
+  }
+  if (wantRisky) {
+    if (!env.SETUP_PASSWORD) return "Risky mode needs a SETUP_PASSWORD secret on the Worker. Define it first.";
+    if (!(await safeEqual(String(form.get("riskyPassword") ?? ""), env.SETUP_PASSWORD))) {
+      return "Risky mode was NOT enabled: the setup password typed to confirm it is incorrect.";
+    }
   }
   if (!accounts.demo && !accounts.live) return "Choose which account you want to connect (DEMO, LIVE or both).";
   const checks = (["demo", "live"] as const satisfies readonly T212Env[]).map(async (name): Promise<string | null> => {
@@ -289,6 +302,7 @@ function rootPage(): string {
 <li>In Advanced settings keep <strong>Sign in now</strong> and set the OAuth client to <strong>Register automatically</strong> (not "Use Claude's published identity").</li>
 <li>On the connect page choose DEMO, LIVE or Both and enter your Trading 212 API key and secret.</li>
 <li><strong>Highly recommended:</strong> define a Cloudflare secret named <code>SETUP_PASSWORD</code>, so only you can open the connect page. Without it the page is open to anyone who knows your Worker URL.</li>
+<li>Optional <strong>Risky mode</strong> on the connect page removes the per-order value cap. It needs the setup password (typed again to confirm).</li>
 <li>Keep the write tools (orders, pies) on "needs approval".</li>
 </ol>
 <div class="warn">LIVE mode can place real orders with real money. Use at your own risk. Nothing here is financial advice.</div>

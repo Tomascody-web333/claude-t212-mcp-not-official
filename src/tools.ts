@@ -21,6 +21,8 @@ interface Ctx {
   apiSecret: string;
   env: T212Env;
   readOnly: boolean;
+  /** Risky mode: no per-order value cap. */
+  noCap: boolean;
   userId: string;
 }
 
@@ -34,7 +36,7 @@ function resolve(account?: T212Env): Ctx {
   }
   const creds = p[chosen];
   if (!creds) throw new Error(`The ${chosen.toUpperCase()} account is not connected. Reconnect the connector and enter those keys.`);
-  return { ...creds, env: chosen, readOnly: chosen === "live" && p.liveReadOnly, userId: p.userId };
+  return { ...creds, env: chosen, readOnly: chosen === "live" && p.liveReadOnly, noCap: p.noOrderCap === true, userId: p.userId };
 }
 
 /** Runs a tool, turning errors into readable responses for Claude. */
@@ -67,8 +69,9 @@ function resolveQuantity(args: {
   quantity?: number;
   value?: number;
   price?: number; // reference price (limit/stop/estimated)
+  noCap?: boolean; // risky mode: skip the MAX_ORDER_VALUE check
 }): number {
-  const { side, quantity, value, price } = args;
+  const { side, quantity, value, price, noCap } = args;
   if ((quantity === undefined) === (value === undefined)) {
     throw new Error("Provide exactly one of: quantity (number of shares) or value (amount in the account currency).");
   }
@@ -82,8 +85,11 @@ function resolveQuantity(args: {
     if (!price) throw new Error("Buys require a price (limit/stop/estimated) to check the safety cap.");
     const notional = qty * price;
     const cap = maxOrderValue();
-    if (notional > cap) {
-      throw new Error(`Refused: the order is worth ~${notional.toFixed(2)}, above the safety cap MAX_ORDER_VALUE=${cap}.`);
+    if (!noCap && notional > cap) {
+      throw new Error(
+        `Refused: the order is worth ~${notional.toFixed(2)}, above the safety cap MAX_ORDER_VALUE=${cap}. ` +
+          `To allow bigger orders the user can reconnect the connector with "Risky mode" (requires the setup password) or raise MAX_ORDER_VALUE on the Worker. Do not split the order to get around the cap.`,
+      );
     }
   }
   return side === "buy" ? qty : -qty;
@@ -118,7 +124,7 @@ const INSTRUCTIONS = `Unofficial Trading 212 server (Invest and Stocks ISA accou
 ACCOUNTS
 - DEMO = simulated money, LIVE = real money. If both are connected, every tool needs 'account' ("demo" or "live"). Never guess: ask the user.
 - Before any write on LIVE, state what you are about to do (ticker, side, quantity/amount, price, order type) and wait for the user's confirmation.
-- The LIVE account may be read-only (writes are refused), and buys are capped per order (MAX_ORDER_VALUE). Do not try to split an order to get around the cap.
+- The LIVE account may be read-only (writes are refused), and buys are capped per order (MAX_ORDER_VALUE) unless the user connected in Risky mode. Do not try to split an order to get around the cap; if an order is refused for size, tell the user how to allow it (Risky mode or a higher MAX_ORDER_VALUE).
 - Amounts are in the account currency (check get_account_summary). The API only trades in that currency.
 
 FINDING TICKERS AND PRICES
@@ -323,7 +329,7 @@ export function createServer(): McpServer {
     },
     async (p, a) => {
       assertCanWrite(p);
-      const q = resolveQuantity({ side: a.side, quantity: a.quantity, value: a.value, price: a.estimatedPrice });
+      const q = resolveQuantity({ side: a.side, quantity: a.quantity, value: a.value, price: a.estimatedPrice, noCap: p.noCap });
       return t212(p, "POST", "/equity/orders/market", {
         body: { ticker: a.ticker, quantity: q, extendedHours: a.extendedHours },
       });
@@ -343,7 +349,7 @@ export function createServer(): McpServer {
     },
     async (p, a) => {
       assertCanWrite(p);
-      const q = resolveQuantity({ side: a.side, quantity: a.quantity, value: a.value, price: a.limitPrice });
+      const q = resolveQuantity({ side: a.side, quantity: a.quantity, value: a.value, price: a.limitPrice, noCap: p.noCap });
       return t212(p, "POST", "/equity/orders/limit", {
         body: { ticker: a.ticker, quantity: q, limitPrice: a.limitPrice, timeValidity: a.timeValidity },
       });
@@ -363,7 +369,7 @@ export function createServer(): McpServer {
     },
     async (p, a) => {
       assertCanWrite(p);
-      const q = resolveQuantity({ side: a.side, quantity: a.quantity, value: a.value, price: a.stopPrice });
+      const q = resolveQuantity({ side: a.side, quantity: a.quantity, value: a.value, price: a.stopPrice, noCap: p.noCap });
       return t212(p, "POST", "/equity/orders/stop", {
         body: { ticker: a.ticker, quantity: q, stopPrice: a.stopPrice, timeValidity: a.timeValidity },
       });
@@ -390,7 +396,7 @@ export function createServer(): McpServer {
     },
     async (p, a) => {
       assertCanWrite(p);
-      const q = resolveQuantity({ side: a.side, quantity: a.quantity, value: a.value, price: a.limitPrice });
+      const q = resolveQuantity({ side: a.side, quantity: a.quantity, value: a.value, price: a.limitPrice, noCap: p.noCap });
       return t212(p, "POST", "/equity/orders/stop_limit", {
         body: { ticker: a.ticker, quantity: q, stopPrice: a.stopPrice, limitPrice: a.limitPrice, timeValidity: a.timeValidity },
       });

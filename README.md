@@ -127,6 +127,10 @@ Not every Claude client necessarily shows the `instructions` to the model, which
 
 - `MAX_ORDER_VALUE` (`wrangler.jsonc`, default `100`): refuses buy orders worth more than this per order,
   in the account currency. Lower it, or raise it deliberately.
+- **Risky mode** (connect page): removes the `MAX_ORDER_VALUE` cap for that connection, so Claude can place orders
+  of any size on the DEMO and LIVE accounts you connect there. It is locked unless `SETUP_PASSWORD` is set, and ticking
+  it requires typing the setup password again before you press Connect. Use it only if you understand the risk:
+  keep the write tools on "needs approval" and read every order before approving.
 - **LIVE account read-only** (connect page): blocks orders and pies with real money. DEMO stays unrestricted.
 - Per-tool permissions in Claude: keep write tools on "needs approval" and read the order before approving.
 - API keys are stored encrypted at rest ([workers-oauth-provider](https://github.com/cloudflare/workers-oauth-provider))
