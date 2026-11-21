@@ -119,11 +119,11 @@ ${gate ? "" : '<div class="err"><strong>No setup password is set (HIGHLY RECOMME
   <div class="row"><input type="checkbox" id="r" name="liveReadOnly" value="1"><label for="r">LIVE account read-only (blocks placing/cancelling orders and pies with real money)</label></div>
  </fieldset>
  </div>
- ${gate ? `<fieldset class="risky"><legend><strong>Risky mode</strong></legend>
-  <div class="row"><input type="checkbox" id="rk" name="riskyMode" value="1"><label for="rk"><strong>Remove the maximum order value.</strong> Without this, buy orders above MAX_ORDER_VALUE (set on the Worker, default 100) are refused. With it, Claude can place orders of ANY size on the accounts you connect here, DEMO and LIVE.</label></div>
-  <div class="risky-confirm"><label for="rkp">Setup password (type it again; only needed if Risky mode is ticked)</label><input id="rkp" name="riskyPassword" type="password" autocomplete="off"></div>
- </fieldset>` : `<fieldset class="risky"><legend><strong>Risky mode</strong></legend>
-  <div class="row"><input type="checkbox" disabled><label>Remove the maximum order value. <strong>Locked:</strong> it is only available when a <code>SETUP_PASSWORD</code> secret is set on the Worker.</label></div>
+ ${gate ? `<fieldset class="risky"><legend><strong>Advanced mode</strong></legend>
+  <div class="row"><input type="checkbox" id="rk" name="advancedMode" value="1"><label for="rk"><strong>Raise the maximum order value.</strong> Without it, buy orders above MAX_ORDER_VALUE (set on the Worker, default 100) are refused. With it: <strong>DEMO has no limit</strong> and <strong>LIVE allows up to 1000 per order</strong> (account currency). For security, going above 1000 on LIVE can only be done by changing the code directly (<code>ADVANCED_LIVE_MAX_ORDER</code> in <code>src/tools.ts</code>), never from this page.</label></div>
+  <div><label for="rkp">Setup password (type it again; only needed if Advanced mode is ticked)</label><input id="rkp" name="advancedPassword" type="password" autocomplete="off"></div>
+ </fieldset>` : `<fieldset class="risky"><legend><strong>Advanced mode</strong></legend>
+  <div class="row"><input type="checkbox" disabled><label>Raise the maximum order value (DEMO unlimited, LIVE up to 1000 per order). <strong>Locked:</strong> it is only available when a <code>SETUP_PASSWORD</code> secret is set on the Worker.</label></div>
  </fieldset>`}
  <p class="hint">When both are connected, Claude must say whether each action is on <em>demo</em> or <em>live</em>.</p>
  ${gate ? `<input type="hidden" name="gateToken" value="${esc(gate)}">` : ""}
@@ -212,10 +212,10 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
       const demo: Account | undefined = wantDemo ? { apiKey: field("demoKey"), apiSecret: field("demoSecret") } : undefined;
       const live: Account | undefined = wantLive ? { apiKey: field("liveKey"), apiSecret: field("liveSecret") } : undefined;
       const liveReadOnly = wantLive && form.get("liveReadOnly") === "1";
-      const wantRisky = form.get("riskyMode") === "1";
+      const wantAdvanced = form.get("advancedMode") === "1";
 
       // Validate everything BEFORE consuming the handle, so an error can be shown on the same page.
-      const problem = await validate(env, form, handle, { demo, live }, wantRisky);
+      const problem = await validate(env, form, handle, { demo, live }, wantAdvanced);
       if (problem) {
         // The handle is still valid (not consumed): show the form again with the error.
         return new Response(page(null, handle, env.SETUP_PASSWORD ? await gateToken(env.SETUP_PASSWORD, handle) : null, problem), { status: 400, headers: SECURITY_HEADERS });
@@ -223,11 +223,11 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
 
       const approved = await oauth.approveConsent(request, handle);
       const userId = (await sha256(`${demo?.apiKey ?? ""}|${live?.apiKey ?? ""}`)).slice(0, 24);
-      const props: Props = { userId, demo, live, liveReadOnly, noOrderCap: wantRisky };
+      const props: Props = { userId, demo, live, liveReadOnly, advancedMode: wantAdvanced };
       const { redirectTo } = await oauth.completeAuthorization({
         request: approved.request,
         userId,
-        metadata: { demo: Boolean(demo), live: Boolean(live), liveReadOnly, riskyMode: wantRisky },
+        metadata: { demo: Boolean(demo), live: Boolean(live), liveReadOnly, advancedMode: wantAdvanced },
         scope: approved.request.scope,
         props,
       });
@@ -246,16 +246,16 @@ async function handleAuthorize(request: Request, env: Env): Promise<Response> {
   }
 }
 
-async function validate(env: Env, form: FormData, handle: string, accounts: { demo?: Account; live?: Account }, wantRisky: boolean): Promise<string | null> {
+async function validate(env: Env, form: FormData, handle: string, accounts: { demo?: Account; live?: Account }, wantAdvanced: boolean): Promise<string | null> {
   if (env.SETUP_PASSWORD) {
     const given = String(form.get("gateToken") ?? "");
     if (!(await safeEqual(given, await gateToken(env.SETUP_PASSWORD, handle)))) return "Setup password missing or expired. Reload the page and enter it again.";
   }
   if (form.get("acceptDisclaimer") !== "1") return "You must read and accept the disclaimer to connect.";
-  if (wantRisky) {
-    if (!env.SETUP_PASSWORD) return "Risky mode needs a SETUP_PASSWORD secret on the Worker. Define it first.";
-    if (!(await safeEqual(String(form.get("riskyPassword") ?? ""), env.SETUP_PASSWORD))) {
-      return "Risky mode was NOT enabled: the setup password typed to confirm it is incorrect.";
+  if (wantAdvanced) {
+    if (!env.SETUP_PASSWORD) return "Advanced mode needs a SETUP_PASSWORD secret on the Worker. Define it first.";
+    if (!(await safeEqual(String(form.get("advancedPassword") ?? ""), env.SETUP_PASSWORD))) {
+      return "Advanced mode was NOT enabled: the setup password typed to confirm it is incorrect.";
     }
   }
   if (!accounts.demo && !accounts.live) return "Choose which account you want to connect (DEMO, LIVE or both).";
@@ -307,7 +307,7 @@ function rootPage(): string {
 <li>In Advanced settings keep <strong>Sign in now</strong> and set the OAuth client to <strong>Register automatically</strong> (not "Use Claude's published identity").</li>
 <li>On the connect page choose DEMO, LIVE or Both and enter your Trading 212 API key and secret.</li>
 <li><strong>Highly recommended:</strong> define a Cloudflare secret named <code>SETUP_PASSWORD</code>, so only you can open the connect page. Without it the page is open to anyone who knows your Worker URL.</li>
-<li>Optional <strong>Risky mode</strong> on the connect page removes the per-order value cap. It needs the setup password (typed again to confirm).</li>
+<li>Optional <strong>Advanced mode</strong> on the connect page raises the per-order limit: DEMO unlimited, LIVE up to 1000 per order. It needs the setup password (typed again to confirm). Going above 1000 on LIVE requires changing the code directly.</li>
 <li>Keep the write tools (orders, pies) on "needs approval".</li>
 </ol>
 <div class="warn">LIVE mode can place real orders with real money. Use at your own risk. Nothing here is financial advice.</div>

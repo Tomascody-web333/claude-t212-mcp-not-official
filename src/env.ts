@@ -24,6 +24,6 @@ export interface Props extends Record<string, unknown> {
   live?: Account;
   /** If true, the LIVE account is read-only (DEMO stays unrestricted). */
   liveReadOnly: boolean;
-  /** Risky mode: the per-order cap MAX_ORDER_VALUE is NOT applied (only possible with a setup password). */
-  noOrderCap?: boolean;
+  /** Advanced mode: higher per-order limit (DEMO unlimited, LIVE up to ADVANCED_LIVE_MAX_ORDER). Needs the setup password. */
+  advancedMode?: boolean;
 }
