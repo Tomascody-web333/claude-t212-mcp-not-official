@@ -18,12 +18,18 @@ as a separate tool so you can set permissions per tool in Claude (e.g. "needs ap
 ## Requirements
 
 - A Cloudflare account (the free plan is enough).
-- Node.js 20+ and `npm`.
+- **Either** Node.js 20+ with `npm` **or** a GitHub / GitLab account (see the two deploy options below).
 - A Trading 212 API key + secret (Trading 212 app → Settings → API). Create separate keys for DEMO and LIVE
   and grant only the permissions you need (read-only if you just want to look).
 - A Claude plan that supports custom connectors.
 
 ## Deploy
+
+Pick one of the two ways. Both end with the same Worker.
+
+### Option A: with npm (Wrangler CLI)
+
+Needs Node.js 20+ and `npm`.
 
 ```bash
 git clone https://github.com/Tomascody-web333/claude-t212-mcp-not-official
@@ -42,12 +48,24 @@ npx wrangler secret put SETUP_PASSWORD
 npx wrangler deploy
 ```
 
-Wrangler prints your URL, e.g. `https://t212-mcp.<your-subdomain>.workers.dev`.
-The MCP endpoint is that URL plus `/mcp`.
+### Option B: connect GitHub or GitLab to Cloudflare (no local tools)
 
-You can also deploy from GitHub with Cloudflare **Workers Builds** (build command: none/`npm install`,
-deploy command: `npx wrangler deploy`). Every push to `main` then redeploys automatically.
+Needs a GitHub or GitLab account. Cloudflare builds and deploys the Worker for you, and every push redeploys it.
 
+1. **Fork** (or copy) this repository to your own GitHub / GitLab account.
+2. In the Cloudflare dashboard create a **KV namespace** (Storage & Databases → KV) and copy its ID.
+   Put that ID in `wrangler.jsonc` (`kv_namespaces[0].id`) in your fork and commit it.
+3. In the dashboard go to Workers & Pages → **Create** → import a repository (Workers Builds), and select
+   your GitHub / GitLab account and the fork.
+4. Build command: leave empty (or `npm install`). Deploy command: `npx wrangler deploy`.
+   Keep the Worker name equal to `name` in `wrangler.jsonc` (`t212-mcp`), otherwise the build fails.
+5. (Optional, recommended) In the Worker's **Settings → Variables and Secrets** add a secret named `SETUP_PASSWORD`.
+
+Exact menu names may change in the Cloudflare dashboard.
+
+### After deploying
+
+Your URL looks like `https://t212-mcp.<your-subdomain>.workers.dev`. The MCP endpoint is that URL plus `/mcp`.
 Change the worker name in `wrangler.jsonc` if you want a different URL.
 
 ## Connect in Claude
