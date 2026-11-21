@@ -264,11 +264,44 @@ async function validate(env: Env, form: FormData, handle: string, accounts: { de
   return null;
 }
 
+const REPO = "https://github.com/Tomascody-web333/claude-t212-mcp-not-official";
+
+function rootPage(origin: string): string {
+  return shell("Unofficial Trading 212 MCP server", `<style>code{background:#161d27;border:1px solid var(--border);border-radius:6px;padding:1px 6px;font-size:.9em;word-break:break-all}ol,ul{padding-left:1.2rem}li{margin:4px 0}h2{font-size:1.05rem;margin:22px 0 6px}</style>
+<div class="card">
+<h1>Unofficial Trading 212 MCP server</h1>
+<p>This is an <strong>unofficial</strong> Claude Trading 212 MCP server. It is not affiliated with, endorsed by or supported by Trading 212 or Anthropic.</p>
+<p>Created by <a href="https://github.com/Tomascody-web333">Tomascody-web333</a> with help of Claude Code.</p>
+<ul>
+<li>My website: <a href="https://homeserverlab.org">homeserverlab.org</a></li>
+<li>GitHub profile: <a href="https://github.com/Tomascody-web333">github.com/Tomascody-web333</a></li>
+<li>Source code: <a href="${REPO}">${REPO.replace("https://", "")}</a></li>
+</ul>
+
+<h2>How it works</h2>
+<p>This Cloudflare Worker is a remote MCP server. Claude talks to it, and it talks to the Trading 212 API with your own API keys. Claude can read positions, orders, dividends and pies, and (if you allow it) place orders. DEMO (simulated money) and LIVE (real money) can be connected together, and every action is a separate tool so you can set permissions per tool. Your keys are stored encrypted and never sent to Claude.</p>
+
+<h2>How to set it up</h2>
+<ol>
+<li>Deploy your own copy (npm + Wrangler, or connect your GitHub / GitLab repo to Cloudflare Workers). Steps are in the <a href="${REPO}#deploy">README</a>.</li>
+<li>In Claude: Settings → Connectors → Add custom connector, URL: <code>${esc(origin)}/mcp</code></li>
+<li>In Advanced settings keep <strong>Sign in now</strong> and set the OAuth client to <strong>Register automatically</strong> (not "Use Claude's published identity").</li>
+<li>On the connect page choose DEMO, LIVE or Both and enter your Trading 212 API key and secret.</li>
+<li>Keep the write tools (orders, pies) on "needs approval".</li>
+</ol>
+<div class="warn">LIVE mode can place real orders with real money. Use at your own risk. Nothing here is financial advice.</div>
+
+<h2>License</h2>
+<p>Licensed under the <a href="${REPO}/blob/main/LICENSE">Apache License, Version 2.0</a>. Commercial use is allowed, but you must keep the copyright and <a href="${REPO}/blob/main/NOTICE">NOTICE</a> credit: <em>Created by Tomascody-web333 (homeserverlab.org)</em>. The software is provided "AS IS", without warranties of any kind.</p>
+<p class="hint">Copyright 2026 Tomascody-web333</p>
+</div>`);
+}
+
 export const authHandler = {
   fetch(request: Request, env: Env): Promise<Response> | Response {
     const { pathname } = new URL(request.url);
     if (pathname === "/authorize") return handleAuthorize(request, env);
-    if (pathname === "/") return new Response("Trading 212 MCP server. Connect it in Claude under Connectors.", { status: 200 });
+    if (pathname === "/") return new Response(rootPage(new URL(request.url).origin), { headers: SECURITY_HEADERS });
     return new Response("Not found", { status: 404 });
   },
 };

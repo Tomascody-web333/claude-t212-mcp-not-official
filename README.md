@@ -5,6 +5,9 @@ Trading 212 account (Invest / Stocks ISA). It runs on your own Cloudflare accoun
 **DEMO** (simulated money) and **LIVE** (real money) in the same connector, and exposes every action
 as a separate tool so you can set permissions per tool in Claude (e.g. "needs approval" for orders).
 
+Created by [Tomascody-web333](https://github.com/Tomascody-web333) with help of Claude Code ·
+[homeserverlab.org](https://homeserverlab.org) · [Source code](https://github.com/Tomascody-web333/claude-t212-mcp-not-official)
+
 > **Unofficial project.** Not affiliated with, endorsed by or supported by Trading 212.
 > Uses the public Trading 212 API (v0, beta). **LIVE mode can place real orders with real money.**
 > Use at your own risk, start with DEMO, and read the [Safety](#safety) section. Nothing here is financial advice.
@@ -64,6 +67,9 @@ Needs a GitHub or GitLab account. Cloudflare builds and deploys the Worker for y
 Exact menu names may change in the Cloudflare dashboard.
 
 ### After deploying
+
+Open your Worker URL in a browser: the root page (`/`) shows what this server is, who created it, how it works,
+how to set it up and the license, with links to this repository, my website and my GitHub profile.
 
 Your URL looks like `https://t212-mcp.<your-subdomain>.workers.dev`. The MCP endpoint is that URL plus `/mcp`.
 Change the worker name in `wrangler.jsonc` if you want a different URL.
