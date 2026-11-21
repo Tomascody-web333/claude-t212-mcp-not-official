@@ -53,7 +53,10 @@ npx wrangler deploy
 
 ### Option B: connect GitHub or GitLab to Cloudflare (no local tools)
 
-Needs a GitHub or GitLab account. Cloudflare builds and deploys the Worker for you, and every push redeploys it.
+**Highly recommended.** Needs a GitHub or GitLab account. Cloudflare builds and deploys the Worker for you, and every push to your fork redeploys it.
+Because your Worker is tied to a fork, getting bug fixes is easy: on GitHub click **Sync fork → Update branch**
+(or pull the upstream changes on GitLab) and Cloudflare redeploys the fixed version by itself. With Option A you have
+to pull the changes and run `npx wrangler deploy` yourself each time.
 
 1. **Fork** (or copy) this repository to your own GitHub / GitLab account.
 2. In the Cloudflare dashboard create a **KV namespace** (Storage & Databases → KV) and copy its ID.
@@ -65,6 +68,9 @@ Needs a GitHub or GitLab account. Cloudflare builds and deploys the Worker for y
 5. **Highly recommended:** in the Worker's **Settings → Variables and Secrets** add a secret named `SETUP_PASSWORD`.
 
 Exact menu names may change in the Cloudflare dashboard.
+
+**Updating:** with Option A run `git pull`, `npm install` and `npx wrangler deploy` to get the latest fixes.
+With Option B sync your fork (see above).
 
 ### After deploying
 
